@@ -1,16 +1,12 @@
 # TODO
 
-## Archive pruning
+## Granular retention
 
-Automatically delete old recordings from the NAS archive based on retention policy. Should be heavily configurable:
+Basic retention is implemented (`RETENTION_DAYS` and `RETENTION_PERCENT`). Remaining work:
 
-- Retention period (e.g. 30 days, 90 days, unlimited)
 - Per-camera overrides (keep front door longer than backyard)
 - Per-channel overrides (shorter retention for low-quality streams)
 - Dry-run mode to preview what would be deleted
-- Minimum free disk space trigger (only prune when space is low vs. always enforce retention)
-
-Currently users manage retention manually (deleting old date folders, NAS-level quotas, external cron jobs).
 
 ## Protect device cleanup
 

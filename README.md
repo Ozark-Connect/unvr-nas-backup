@@ -204,7 +204,7 @@ Files are stored canonically by camera, with date-based symlinks for browsing by
   - `[backup] ... WARN: Archive volume has less than 100 GB free` - time to plan cleanup
   - `[backup] ... WARN: CRITICAL: Archive volume has less than 10 GB free` - backups may start failing
 
-  There is no automatic pruning yet (see [Future features](#future-features)). You are responsible for managing retention (e.g., deleting old date folders, NAS-level quotas, or a cron job). Staging is cleaned after each run.
+  Use `RETENTION_DAYS` and/or `RETENTION_PERCENT` to manage archive size automatically (see [Configuration](#configuration)). Staging is cleaned after each run.
 - **Permissions**: The installer needs Docker access and write permissions to the archive path - on most NAS systems you're already root. The container runs as root internally for cron, SSH key handling, and volume writes. It does not expose any ports or accept inbound connections.
 
 ## Performance
@@ -217,7 +217,7 @@ See [docs/performance.md](docs/performance.md) for the full profiling data, ciph
 
 ## Future features
 
-- **Archive pruning** - Automatically delete old recordings from the NAS archive based on configurable retention policies (per-camera, per-channel, minimum free space triggers, dry-run mode).
+- **Granular retention** - Per-camera and per-channel retention overrides, dry-run mode to preview what would be deleted.
 - **Protect device cleanup** - After recordings are safely backed up, optionally remove them from the Protect device (both `.ubv` files and DB rows) to free up space. Off by default, with safety checks and configurable minimum age before cleanup.
 
 See [TODO.md](TODO.md) for details.
