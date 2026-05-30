@@ -18,6 +18,7 @@ BACKUP_CHANNELS="${BACKUP_CHANNELS:-0}"
 SSH_DIR="${SSH_DIR:-/tmp/.ssh-copy}"
 RETENTION_DAYS="${RETENTION_DAYS:-}"
 RETENTION_PERCENT="${RETENTION_PERCENT:-}"
+MAX_ARCHIVE_SIZE="${MAX_ARCHIVE_SIZE:-}"
 
 STAGING_DIR="/staging"
 REMUX_DIR="${STAGING_DIR}/remuxed"
@@ -108,7 +109,37 @@ run_retention_prune() {
         date_dirs=$(ls -1 "${ARCHIVE_DIR}/by-date/" 2>/dev/null | sort)
     fi
 
-    # Phase 2: RETENTION_PERCENT — delete oldest until disk usage drops below threshold
+    # Phase 2: MAX_ARCHIVE_SIZE — delete oldest until archive is under the size limit
+    if [ -n "$MAX_ARCHIVE_SIZE" ]; then
+        local archive_bytes max_bytes archive_gb
+        max_bytes=$((MAX_ARCHIVE_SIZE * 1073741824))
+        archive_bytes=$(du -sb "$ARCHIVE_DIR" | awk '{print $1}')
+        archive_gb=$(( archive_bytes / 1073741824 ))
+        if [ "${archive_bytes:-0}" -gt "$max_bytes" ]; then
+            log "Retention: archive at ${archive_gb} GB, target <${MAX_ARCHIVE_SIZE} GB"
+            while IFS= read -r d; do
+                [ -d "${ARCHIVE_DIR}/by-date/${d}" ] || continue
+                prune_date_dir "$d"
+                archive_bytes=$(du -sb "$ARCHIVE_DIR" | awk '{print $1}')
+                archive_gb=$(( archive_bytes / 1073741824 ))
+                if [ "${archive_bytes:-0}" -le "$max_bytes" ]; then
+                    log "Retention: archive now at ${archive_gb} GB, below target"
+                    break
+                fi
+            done <<< "$date_dirs"
+            archive_bytes=$(du -sb "$ARCHIVE_DIR" | awk '{print $1}')
+            archive_gb=$(( archive_bytes / 1073741824 ))
+            if [ "${archive_bytes:-0}" -gt "$max_bytes" ]; then
+                warn "Retention: archive still at ${archive_gb} GB after pruning all available dates"
+            fi
+        else
+            debug "Retention: archive at ${archive_gb} GB, below ${MAX_ARCHIVE_SIZE} GB limit"
+        fi
+        # Refresh list after phase 2
+        date_dirs=$(ls -1 "${ARCHIVE_DIR}/by-date/" 2>/dev/null | sort)
+    fi
+
+    # Phase 3: RETENTION_PERCENT — delete oldest until disk usage drops below threshold
     if [ -n "$RETENTION_PERCENT" ]; then
         local usage
         usage=$(df --output=pcent "$ARCHIVE_DIR" | tail -1 | tr -dc '0-9')
@@ -151,6 +182,10 @@ fi
 if [ -n "${RETENTION_PERCENT}" ]; then
     [[ "$RETENTION_PERCENT" =~ ^[0-9]+$ ]] || die "RETENTION_PERCENT must be a positive integer"
     [ "$RETENTION_PERCENT" -gt 0 ] && [ "$RETENTION_PERCENT" -le 99 ] || die "RETENTION_PERCENT must be 1-99"
+fi
+if [ -n "${MAX_ARCHIVE_SIZE}" ]; then
+    [[ "$MAX_ARCHIVE_SIZE" =~ ^[0-9]+$ ]] || die "MAX_ARCHIVE_SIZE must be a positive integer (GB)"
+    [ "$MAX_ARCHIVE_SIZE" -gt 0 ] || die "MAX_ARCHIVE_SIZE must be > 0"
 fi
 
 # ── Lock (atomic via flock) ──────────────────────────────────────────────────
@@ -219,7 +254,7 @@ EOSQL
 TOTAL=$(echo "$CSV" | tail -n +2 | grep -c . || true)
 if [ "$TOTAL" -eq 0 ]; then
     log "No new recordings found."
-    if [ -n "${RETENTION_DAYS}" ] || [ -n "${RETENTION_PERCENT}" ]; then
+    if [ -n "${RETENTION_DAYS}" ] || [ -n "${MAX_ARCHIVE_SIZE}" ] || [ -n "${RETENTION_PERCENT}" ]; then
         run_retention_prune
     fi
     log "Done."
@@ -377,7 +412,7 @@ done
 log "Archived ${archived} file(s) to ${ARCHIVE_DIR}"
 
 # ── Retention pruning ───────────────────────────────────────────────────────
-if [ -n "${RETENTION_DAYS}" ] || [ -n "${RETENTION_PERCENT}" ]; then
+if [ -n "${RETENTION_DAYS}" ] || [ -n "${MAX_ARCHIVE_SIZE}" ] || [ -n "${RETENTION_PERCENT}" ]; then
     run_retention_prune
 fi
 
