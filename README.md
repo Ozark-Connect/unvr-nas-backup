@@ -200,6 +200,7 @@ Files are stored canonically by camera, with date-based symlinks for browsing by
 - **SSH fails**: Ensure your SSH key is in `SSH_KEY_PATH` and is authorized on the Protect device. The container copies keys to fix permissions automatically.
 - **No recordings found**: Increase `BACKUP_HOURS` or check that the device has active recordings. Only `type=rotating` and `active=false` files are selected.
 - **Remux fails**: Verify the `.ubv` file is complete (not still being recorded). The query filters `active=false` to prevent this.
+- **Remux reports `Tracks: 0` / `No .mp4 produced`**: The `.ubv` format is one the bundled remux can't parse. Protect 7.3.53 changed the partition header, and images before this fix can't read files from 7.3.53 or later (see [patches/README.md](patches/README.md)). Update the image. Files that produced no `.mp4` are listed in `/staging/.remux-failures` and are skipped on later runs, so the backup doesn't copy them again every cycle. After updating, remove those entries (or the whole file) to back them up again: `docker compose exec unvr-nas-backup rm /staging/.remux-failures`. Only files still on the Protect device and inside the `BACKUP_HOURS` window are picked up.
 - **Container shows unhealthy**: This is normal until the first successful backup completes. With `RUN_ON_START=true` (the default), this resolves within a few minutes of starting.
 - **Disk space**: The backup script logs two levels of disk space warnings that you can use to set up alerts (e.g., Docker log monitoring, webhook, etc.):
   - `[backup] ... WARN: Archive volume has less than 100 GB free` - time to plan cleanup
@@ -225,7 +226,7 @@ See [TODO.md](TODO.md) for details.
 
 ## Acknowledgments
 
-This project uses [unifi-protect-remux](https://github.com/petergeneric/unifi-protect-remux) by Peter Wright for converting `.ubv` video files to `.mp4`. The remux binary is licensed under [AGPL-3.0](https://www.gnu.org/licenses/agpl-3.0.html) and is downloaded at build time - see [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) for details.
+This project uses [unifi-protect-remux](https://github.com/petergeneric/unifi-protect-remux) by Peter Wright for converting `.ubv` video files to `.mp4`. The remux binary is licensed under [AGPL-3.0](https://www.gnu.org/licenses/agpl-3.0.html) and is built from source at image build time, with the patches in [patches/](patches/) applied - see [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) for details.
 
 ## Related projects
 

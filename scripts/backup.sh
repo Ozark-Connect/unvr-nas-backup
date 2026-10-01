@@ -379,8 +379,11 @@ for meta_file in "${STAGING_DIR}/"*.meta; do
         fi
     done
 
+    # remux exits 0 even when it finds no tracks (e.g. an unrecognised .ubv
+    # format), so record it as a failure to stop re-copying it every run.
     if [ -z "$mp4_file" ]; then
-        warn "No .mp4 found for ${ubv_basename} — skipping"
+        warn "No .mp4 produced for ${ubv_basename} — recording as remux failure"
+        grep -qFx "$ubv_basename" "$FAILURES_FILE" 2>/dev/null || echo "$ubv_basename" >> "$FAILURES_FILE"
         continue
     fi
 

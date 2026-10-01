@@ -3,3 +3,4 @@
 Dockerfile text eol=lf
 compose.yml text eol=lf
 .env.example text eol=lf
+*.patch text eol=lf

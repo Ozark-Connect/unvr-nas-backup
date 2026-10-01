@@ -1,3 +1,30 @@
+# ── Build unifi-protect-remux from source with local patches ────────────────
+# Upstream v4.2.2 cannot parse .ubv files from Protect 7.3.53+ (see patches/).
+FROM rust:1-bookworm AS remux-build
+
+ARG REMUX_REPO=https://github.com/petergeneric/unifi-protect-remux.git
+# v4.2.2
+ARG REMUX_COMMIT=9f2cf0906d5baca92d327831ad778d950764bed5
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        nasm \
+        pkg-config \
+        libclang-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /src
+RUN git init -q . \
+    && git remote add origin "${REMUX_REPO}" \
+    && git fetch -q --depth 1 origin "${REMUX_COMMIT}" \
+    && git checkout -q FETCH_HEAD
+
+COPY patches/ /patches/
+RUN git apply /patches/*.patch \
+    && cargo test --locked --release -p ubv --lib \
+    && cargo build --locked --release -p remux \
+    && cp target/release/remux /usr/local/bin/remux
+
+# ── Runtime image ───────────────────────────────────────────────────────────
 FROM debian:bookworm-slim
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -8,19 +35,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         procps \
     && rm -rf /var/lib/apt/lists/*
 
-# Install unifi-protect-remux v4.1.4 — pick the right binary for the build platform
-ARG TARGETARCH
-RUN case "${TARGETARCH}" in \
-        amd64) REMUX_ARCH="x86_64" ;; \
-        arm64) REMUX_ARCH="aarch64" ;; \
-        *)     echo "Unsupported architecture: ${TARGETARCH}" >&2; exit 1 ;; \
-    esac \
-    && curl -fsSL "https://github.com/petergeneric/unifi-protect-remux/releases/download/v4.1.4/unifi-protect-remux-linux-${REMUX_ARCH}.tar.gz" \
-        -o /tmp/remux.tar.gz \
-    && tar -xzf /tmp/remux.tar.gz -C /tmp \
-    && mv /tmp/remux /usr/local/bin/remux \
-    && chmod +x /usr/local/bin/remux \
-    && rm -f /tmp/remux.tar.gz
+COPY --from=remux-build /usr/local/bin/remux /usr/local/bin/remux
 
 COPY scripts/entrypoint.sh /usr/local/bin/entrypoint.sh
 COPY scripts/backup.sh /usr/local/bin/backup.sh
